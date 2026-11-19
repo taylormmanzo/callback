@@ -1,0 +1,10 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Tests</title>
+<style>body{font:14px system-ui;margin:20px}.ok{color:#17693a}.bad{color:#a02525}</style></head>
+<body><h1>Logic tests</h1><pre id="out"></pre>
+<script src="../data.js"></script><script src="../logic.js"></script><script src="tests.js"></script>
+<script>
+  const r = MW_RUN_TESTS();
+  document.getElementById('out').textContent = r.map(t => (t.ok ? 'PASS ' : 'FAIL ') + t.name + (t.err ? '\n     ' + t.err : '')).join('\n') +
+    `\n\n${r.filter(t => t.ok).length}/${r.length} passed`;
+</script></body></html>
