@@ -11,7 +11,8 @@
     draft: {},       // meetingId -> editable follow-through draft
     briefs: {},      // customerId or meetingId -> { text, summary, loadedAt }
     briefDraft: {},  // unsaved brief text
-    soundcheck: {}   // meetingId -> { consent, notes } manual checks
+    soundcheck: {},  // meetingId -> { consent, notes } manual checks
+    live: {}         // meetingId -> { startedAt, endedAt, agendaDone, asked, notes, captures }
   };
 
   /* ---------- tiny DOM helper (text only; never innerHTML) ---------- */
@@ -84,6 +85,7 @@
   const STAGES = [['prep', 'Green Room', 'Prep'], ['context', 'Playbill', 'Customer context'], ['rehearsal', 'Dress Rehearsal', 'Practice'], ['soundcheck', 'Sound Check', 'Pre-call check'], ['live', 'Showtime', 'Live call'], ['coaching', 'Notes', 'Post-call coaching'], ['follow', 'Callback', 'Follow-up']];
   const TAB_KEYS = STAGES.map((s) => s[0]);
   function renderWork() {
+    if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
     const { id, section } = route();
     renderList();
     const m = id && meetingById(id);
@@ -372,6 +374,15 @@
   }
 
   function renderFollow(m) {
+    const caps = liveOf(m.id).captures;
+    return h('div', { class: 'stack' },
+      caps.length ? h('div', { class: 'card' }, h('h2', {}, 'From Showtime: your captures'),
+        h('p', { class: 'muted' }, 'You entered these during the call. They are not added to the draft below automatically.'),
+        caps.map((c) => h('div', { class: 'cap' }, h('span', { class: 'cap-kind' }, CAP_LABEL[c.kind]), h('div', { style: 'flex:1;min-width:0' }, c.text, h('div', { class: 'muted' }, capLine(c)))))) : null,
+      renderFollowDraft(m));
+  }
+
+  function renderFollowDraft(m) {
     const d = getDraft(m), lim = L.LIMITS, locked = d.status !== 'draft';
     const field = (obj, key, label, tag) => h(tag || 'input', { 'aria-label': label, value: obj[key], disabled: locked, oninput: (e) => { obj[key] = e.target.value; } });
     const rm = (arr, i) => h('button', { class: 'secondary', disabled: locked, onclick: () => { arr.splice(i, 1); renderWork(); } }, 'Remove');
@@ -436,13 +447,89 @@
         h('button', { onclick: () => go(m.id, 'live') }, 'Go to Showtime'))));
   }
 
+  /* ---------- Showtime: live call sheet, notes and capture. Nothing is recorded. ---------- */
+  let liveTimer = null;
+  const LIVE_KEY = 'callback.live.v1';
+  const CAP_LABEL = { learning: 'Learning', commitment: 'Commitment', concern: 'Concern', next_step: 'Next step' };
+  const mmss = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
+  function liveOf(id) {
+    const lv = (state.live[id] = state.live[id] && typeof state.live[id] === 'object' ? state.live[id] : {});
+    lv.startedAt = typeof lv.startedAt === 'number' ? lv.startedAt : null;
+    lv.endedAt = typeof lv.endedAt === 'number' ? lv.endedAt : null;
+    lv.agendaDone = lv.agendaDone || {}; lv.asked = lv.asked || {};
+    lv.notes = typeof lv.notes === 'string' ? lv.notes : '';
+    lv.captures = Array.isArray(lv.captures) ? lv.captures : [];
+    return lv;
+  }
+  const elapsed = (lv) => (lv.startedAt ? (lv.endedAt || Date.now()) - lv.startedAt : null);
+  function persistLive() { try { localStorage.setItem(LIVE_KEY, JSON.stringify(state.live)); } catch (e) { /* storage unavailable: stays in memory */ } }
+  function capLine(c) {
+    const bits = [c.at == null ? 'timer off' : mmss(c.at)];
+    if (c.kind === 'commitment' || c.kind === 'next_step') { bits.push(c.owner ? `Owner: ${c.owner}` : 'Owner: not stated'); bits.push(c.due ? `Due: ${c.due}` : 'Due: not stated'); }
+    return bits.join(' · ');
+  }
+
   function renderShowtime(m) {
-    return h('div', { class: 'card empty' }, h('div', { class: 'big', 'aria-hidden': 'true' }, '★'), h('h2', {}, 'Showtime is not built yet'),
-      h('p', {}, 'This is the live-call stage: a call sheet with your agenda and questions, a notes box, and quick capture for learnings, commitments and next steps. A transcript and notes agent would plug in later, only after a real connection exists.'),
-      h('div', { class: 'row', style: 'justify-content:center' }, h('button', { class: 'secondary', onclick: () => go(m.id, 'soundcheck') }, 'Back to Sound Check'), h('button', { class: 'secondary', onclick: () => go(m.id, 'coaching') }, 'Skip to Notes')));
+    const conf = state.conf[m.id], lv = liveOf(m.id);
+    if (state.agenda[m.id] == null) state.agenda[m.id] = L.buildPrepBrief(m, conf).agenda.join('\n');
+    const sum = (getBrief(m) || {}).summary || null;
+    const sheet = L.callSheet(m, conf, sum, state.agenda[m.id]);
+
+    const timerEl = h('span', { class: 'timer' }, lv.startedAt ? mmss(elapsed(lv)) : '00:00');
+    if (lv.startedAt && !lv.endedAt) liveTimer = setInterval(() => { timerEl.textContent = mmss(elapsed(lv)); }, 1000);
+    const status = !lv.startedAt
+      ? h('div', { class: 'row' }, h('span', { class: 'muted' }, 'Not started. This is only a timer; nothing is recorded.'), h('button', { onclick: () => { lv.startedAt = Date.now(); lv.endedAt = null; persistLive(); renderWork(); } }, 'Start call timer'))
+      : lv.endedAt
+        ? h('div', { class: 'row' }, h('strong', {}, 'Call ended'), timerEl, h('button', { onclick: () => go(m.id, 'coaching') }, 'Open Notes'), h('button', { class: 'secondary', onclick: () => { lv.startedAt = null; lv.endedAt = null; persistLive(); renderWork(); } }, 'Reset timer'))
+        : h('div', { class: 'row' }, h('span', { class: 'live-dot', 'aria-hidden': 'true' }), h('strong', {}, 'In call'), timerEl, h('button', { onclick: () => { lv.endedAt = Date.now(); persistLive(); renderWork(); } }, 'End call'));
+
+    const check = (store, i, text) => h('label', { class: 'cs-item' + (store[i] ? ' done' : '') },
+      h('input', { type: 'checkbox', checked: store[i] ? true : null, onchange: (e) => { store[i] = e.target.checked; e.target.parentNode.classList.toggle('done', e.target.checked); persistLive(); } }), h('span', {}, text));
+
+    const left = h('section', { class: 'pane' }, h('h3', {}, 'Call sheet'),
+      h('div', { class: 'cs-group' }, h('strong', {}, 'Agenda'), sheet.agenda.map((t, i) => check(lv.agendaDone, i, t))),
+      h('div', { class: 'cs-group' }, h('strong', {}, 'Discovery questions'), sheet.questions.map((q, i) => check(lv.asked, i, q))),
+      h('div', { class: 'cs-group' }, h('strong', {}, 'Cast'), h('ul', { class: 'plain' }, sheet.attendees.map((a) => h('li', {}, a.name, ' ', a.role ? h('span', { class: 'muted' }, a.role) : h('span', { class: 'muted' }, '(role unconfirmed)'))))),
+      h('div', { class: 'cs-group' }, h('strong', {}, 'Key facts'), sheet.hasBrief
+        ? [h('div', { class: 'muted' }, 'From your brief, unverified'), h('dl', { class: 'facts' }, sheet.facts.map(([k, v]) => [h('dt', {}, k), h('dd', {}, v)]))]
+        : h('p', { class: 'muted' }, 'No account brief loaded. Add one on Playbill.')));
+
+    const notes = h('textarea', { rows: 9, 'aria-label': 'Your notes', placeholder: 'Type your notes as the call goes…', oninput: (e) => { lv.notes = e.target.value; persistLive(); } }, lv.notes);
+    const capText = h('input', { type: 'text', 'aria-label': 'Line to capture', placeholder: 'Line to capture (or select text in your notes)' });
+    const capOwner = h('input', { type: 'text', 'aria-label': 'Owner', placeholder: 'Owner, only if stated' });
+    const capDue = h('input', { type: 'text', 'aria-label': 'Due', placeholder: 'Due, only if stated' });
+    const capMsg = h('div', { class: 'muted', role: 'status' });
+    const pickLine = () => {
+      const sel = notes.value.slice(notes.selectionStart, notes.selectionEnd).trim();
+      if (sel) return sel;
+      const lines = notes.value.split('\n').map((s) => s.trim()).filter(Boolean);
+      return lines[lines.length - 1] || '';
+    };
+    const capture = (kind) => {
+      const cap = L.makeCapture(kind, capText.value.trim() || pickLine(), { owner: capOwner.value, due: capDue.value, atMs: elapsed(lv) });
+      if (!cap) { capMsg.textContent = 'Type a line to capture, or write some notes first.'; return; }
+      lv.captures.push(cap); persistLive(); renderWork();
+    };
+    const center = h('section', { class: 'pane wide' }, h('h3', {}, 'Your notes'), h('div', { class: 'muted' }, 'Saved in this browser only.'), notes,
+      h('h3', {}, 'Capture a line'), capText, h('div', { class: 'row' }, capOwner, capDue),
+      h('div', { class: 'row' }, L.CAPTURE_KINDS.map((k) => h('button', { class: 'secondary', onclick: () => capture(k) }, CAP_LABEL[k]))), capMsg,
+      h('h3', {}, `Captured (${lv.captures.length})`),
+      lv.captures.length ? lv.captures.map((c, i) => h('div', { class: 'cap' }, h('span', { class: 'cap-kind' }, CAP_LABEL[c.kind]),
+        h('div', { style: 'flex:1;min-width:0' }, c.text, h('div', { class: 'muted' }, capLine(c))),
+        h('button', { class: 'secondary', 'aria-label': 'Remove capture', onclick: () => { lv.captures.splice(i, 1); persistLive(); renderWork(); } }, 'Remove'))) : h('p', { class: 'muted' }, 'Nothing captured yet.'));
+
+    const right = h('section', { class: 'pane' }, h('h3', {}, 'Transcript'),
+      h('div', { class: 'dashed' }, h('strong', {}, 'Transcription is not connected'), h('p', { class: 'muted' }, 'Nothing is being recorded. A transcript source would be added later, only after a real, authorized connection exists.')),
+      h('h3', {}, 'Notes agent'),
+      h('p', { class: 'muted' }, 'Would draft structured notes from your notes and a transcript, with you approving every line. It would not invent quotes, owners, dates or sentiment, and would flag unclear speakers.'),
+      h('button', { disabled: true, title: 'Needs a transcript source, which is not built' }, 'Draft notes (unavailable)'),
+      h('p', { class: 'muted' }, 'Get the customer\'s consent before recording or transcribing a call.'));
+
+    return h('div', { class: 'stack' }, h('div', { class: 'card' }, status), h('div', { class: 'card panes' }, left, center, right));
   }
 
   /* ---------- init ---------- */
+  try { const saved = JSON.parse(localStorage.getItem(LIVE_KEY) || 'null'); if (saved && typeof saved === 'object' && !Array.isArray(saved)) state.live = saved; } catch (e) { /* ignore */ }
   buildShell();
   window.addEventListener('hashchange', renderWork);
   window.addEventListener('keydown', (e) => {

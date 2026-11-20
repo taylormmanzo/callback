@@ -142,3 +142,21 @@ ol.questions li::before { content: counter(q); flex: none; width: 26px; height: 
 .branch { border: 1px solid var(--line); border-top: 3px solid var(--line); border-radius: 10px; padding: 12px; background: var(--panel-2); display: grid; gap: 8px; align-content: start; }
 .branch.engaged { border-top-color: var(--ok); } .branch.unsure { border-top-color: var(--warn); } .branch.pushback { border-top-color: var(--bad); }
 .branch .hint { background: var(--accent-bg); color: var(--gold); border-radius: 8px; padding: 6px 10px; font-size: 13px; }
+
+.panes { display: flex; flex-wrap: wrap; padding: 0; overflow: hidden; }
+.pane { flex: 1 1 300px; min-width: 0; padding: 20px 22px; border-right: 1px solid var(--line); }
+.pane:last-child { border-right: 0; }
+.pane.wide { flex: 2 1 420px; }
+.pane h3:first-child { margin-top: 0; }
+.cs-group { margin: 14px 0; }
+.cs-item { display: flex; gap: 10px; align-items: flex-start; margin: 8px 0; cursor: pointer; }
+.cs-item.done span { text-decoration: line-through; color: var(--muted); }
+.facts { display: grid; grid-template-columns: auto 1fr; gap: 6px 16px; margin: 6px 0 0; font-size: 13px; }
+.facts dt { color: var(--muted); } .facts dd { margin: 0; }
+.timer { font-variant-numeric: tabular-nums; font: 600 22px var(--serif); }
+.live-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 0 4px var(--bad-bg); }
+.cap { display: flex; gap: 14px; padding: 10px 0; border-top: 1px solid var(--line); align-items: baseline; }
+.cap-kind { flex: none; width: 96px; font-size: 12px; font-weight: 600; color: var(--gold); }
+.dashed { border: 1px dashed var(--line); border-radius: 8px; padding: 14px; }
+.pane input[type=text] { background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; width: 100%; margin: 4px 0; }
+.pane .row input[type=text] { flex: 1 1 160px; width: auto; }

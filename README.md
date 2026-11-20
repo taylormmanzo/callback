@@ -20,7 +20,7 @@ Call prep, practice, and follow-up usually live in different tools, or nowhere. 
 | **Playbill** (customer context) | Paste an account brief (contract, usage, tickets, last call) and it is parsed into a structured summary. Stands in for future integrations | Built |
 | **Dress Rehearsal** (practice) | Practice against a mock stakeholder whose mood (skeptical, rushed, friendly, ...) shapes the response. Each turn offers three branching replies, then feedback with branch coverage | Built |
 | **Sound Check** (pre-call check) | Two-minute readiness check: customer and attendees confirmed, agenda ready, consent to record obtained | Built |
-| **Showtime** (live call) | In-call call sheet, notes and capture | Not built yet |
+| **Showtime** (live call) | Call sheet (agenda, discovery questions, cast, key facts), a call timer, your notes, and one-click capture of learnings, commitments, concerns and next steps. Owners and dates are only filled in if you type them. No recording or transcription | Built (transcript and notes agent not built) |
 | **Notes** (post-call coaching) | Post-call coaching from the transcript, with sentiment shown only when the transcript supports it | Built |
 | **Callback** (follow-up) | Follow-through draft: commitments, owners, due dates, and suggestions to review before anything is sent | Built |
 
@@ -46,7 +46,7 @@ Call prep, practice, and follow-up usually live in different tools, or nowhere. 
 
 ## Roadmap
 
-- Live mode for in-call support
+- Transcript source and notes agent for Showtime (needs a real, authorized connection first)
 - A standalone customer record page (customers currently appear as a filter and association on each meeting)
 - Real integrations (calendar, CRM, transcripts) replacing the pasted account brief
 
@@ -60,5 +60,5 @@ Call prep, practice, and follow-up usually live in different tools, or nowhere. 
 ## Status and known gaps
 
 - The UI was not exercised in a browser during the build session, because static file previews do not run scripts and a local server was not permitted. `app.js` passes a syntax check only. Open `index.html` and walk the flows before relying on it.
-- Live is not built.
+- Showtime has no transcript or notes agent. Captures live in this browser only and are not added to the Callback draft automatically.
 - All data is synthetic.
