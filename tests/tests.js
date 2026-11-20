@@ -223,6 +223,23 @@
     L.rehearsalBranches(L.rehearsalContext(M('m_nw_2'), 'p_marcus', s, 'rushed', 'IT Director'), 'What about usage?');
     eq(JSON.stringify(D), copy); eq(JSON.stringify(s), before);
   });
+  test('sound check: blocks on unresolved matches, clears when you resolve them', () => {
+    const agendaText = 'Confirm purpose';
+    eq(L.soundCheck(M('m_nw_1'), undefined, { agendaText }).blocking, 0);
+    const hv = L.soundCheck(M('m_hv'), undefined, { agendaText });
+    eq(hv.blocking, 2); assert(hv.items.find((i) => i.id === 'attendees').detail.includes('Jordan Alvarez'));
+    const resolved = { customer: { id: 'cust_hvc' }, participants: { p_jordan: { contactId: 'c_ja1' } } };
+    eq(L.soundCheck(M('m_hv'), resolved, { agendaText }).blocking, 0);
+    const dana = L.soundCheck(M('m_nw_2'), undefined, { agendaText });
+    eq(dana.blocking, 1);
+    eq(L.soundCheck(M('m_nw_2'), { participants: { p_dana: { contactId: null } } }, { agendaText }).blocking, 0);
+  });
+  test('sound check: agenda required, brief optional, consent is a manual item', () => {
+    const c = L.soundCheck(M('m_nw_1'), undefined, { agendaText: '  \n' });
+    eq(c.blocking, 1); eq(c.items.find((i) => i.id === 'agenda').ok, false);
+    const brief = c.items.find((i) => i.id === 'brief'); assert(brief.optional && !brief.ok);
+    assert(c.manual.some((x) => x.id === 'consent'));
+  });
   test('rehearsal feedback reports branch coverage', () => {
     const f = L.rolePlayFeedback(['What is blocking you?'], { explored: ['pushback'] });
     assert(f.improvements.some((x) => /1 of 3/.test(x) && /engaged and unsure/.test(x)));

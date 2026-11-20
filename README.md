@@ -16,12 +16,13 @@ Call prep, practice, and follow-up usually live in different tools, or nowhere. 
 
 | Stage | What it does | Status |
 |---|---|---|
-| **Prep** | Matches the meeting to a customer, flags stale, conflicting or missing context, proposes an agenda and three open-ended discovery questions | Built |
-| **Customer Context** | Paste an account brief (contract, usage, tickets, last call) and it is parsed into a structured summary. Stands in for future integrations | Built |
-| **Dress Rehearsal** | Practice against a mock stakeholder whose mood (skeptical, rushed, friendly, ...) shapes the response. Each turn offers three branching replies, then feedback with branch coverage | Built |
-| **Live** | Real-time support during the call | Not built yet |
-| **Notes** | Post-call coaching from the transcript, with sentiment shown only when the transcript supports it | Built |
-| **Callback** | Follow-through draft: commitments, owners, due dates, and suggestions to review before anything is sent | Built |
+| **Green Room** (prep) | Matches the meeting to a customer, flags stale, conflicting or missing context, proposes an agenda and three open-ended discovery questions | Built |
+| **Playbill** (customer context) | Paste an account brief (contract, usage, tickets, last call) and it is parsed into a structured summary. Stands in for future integrations | Built |
+| **Dress Rehearsal** (practice) | Practice against a mock stakeholder whose mood (skeptical, rushed, friendly, ...) shapes the response. Each turn offers three branching replies, then feedback with branch coverage | Built |
+| **Sound Check** (pre-call check) | Two-minute readiness check: customer and attendees confirmed, agenda ready, consent to record obtained | Built |
+| **Showtime** (live call) | In-call call sheet, notes and capture | Not built yet |
+| **Notes** (post-call coaching) | Post-call coaching from the transcript, with sentiment shown only when the transcript supports it | Built |
+| **Callback** (follow-up) | Follow-through draft: commitments, owners, due dates, and suggestions to review before anything is sent | Built |
 
 ## Try it
 

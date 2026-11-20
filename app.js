@@ -10,7 +10,8 @@
     rehearsal: {},   // meetingId -> { roleId, active, log, feedback }
     draft: {},       // meetingId -> editable follow-through draft
     briefs: {},      // customerId or meetingId -> { text, summary, loadedAt }
-    briefDraft: {}   // unsaved brief text
+    briefDraft: {},  // unsaved brief text
+    soundcheck: {}   // meetingId -> { consent, notes } manual checks
   };
 
   /* ---------- tiny DOM helper (text only; never innerHTML) ---------- */
@@ -79,16 +80,19 @@
   }
 
   /* ---------- workspace ---------- */
-  const TAB_KEYS = ['prep', 'context', 'rehearsal', 'coaching', 'follow'];
+  // [key, stage name, plain-English subtitle]
+  const STAGES = [['prep', 'Green Room', 'Prep'], ['context', 'Playbill', 'Customer context'], ['rehearsal', 'Dress Rehearsal', 'Practice'], ['soundcheck', 'Sound Check', 'Pre-call check'], ['live', 'Showtime', 'Live call'], ['coaching', 'Notes', 'Post-call coaching'], ['follow', 'Callback', 'Follow-up']];
+  const TAB_KEYS = STAGES.map((s) => s[0]);
   function renderWork() {
     const { id, section } = route();
     renderList();
     const m = id && meetingById(id);
-    if (!m) { workPane.replaceChildren(h('div', { class: 'card empty' }, h('div', { class: 'big' }, '🗓️'), h('h2', {}, 'Pick a meeting to get started'), h('p', {}, 'Open any synthetic meeting on the left to prepare, rehearse, review and follow up.'))); return; }
-    const sections = { prep: renderPrep, context: renderContext, rehearsal: renderRehearsal, coaching: renderCoaching, follow: renderFollow };
+    if (!m) { workPane.replaceChildren(h('div', { class: 'card empty' }, h('div', { class: 'big', 'aria-hidden': 'true' }, '★'), h('h2', {}, 'The house is empty'), h('p', {}, 'Pick a synthetic meeting on the left to take the stage: prep in the Green Room, rehearse, run the show, then earn the callback.'))); return; }
+    const sections = { prep: renderPrep, context: renderContext, rehearsal: renderRehearsal, soundcheck: renderSoundCheck, live: renderShowtime, coaching: renderCoaching, follow: renderFollow };
     const sec = sections[section] ? section : 'prep';
-    const tabs = h('div', { class: 'tabs', role: 'tablist' }, [['prep', 'Prep'], ['context', 'Customer Context'], ['rehearsal', 'Dress Rehearsal'], ['coaching', 'Notes'], ['follow', 'Callback']].map(([k, t]) =>
-      h('button', { class: 'tab', role: 'tab', 'aria-selected': k === sec ? 'true' : 'false', onclick: () => go(m.id, k) }, t, h('kbd', {}, TAB_KEYS.indexOf(k) + 1))));
+    const tabs = h('div', { class: 'tabs', role: 'tablist' }, STAGES.map(([k, t, sub], i) =>
+      h('button', { class: 'tab', role: 'tab', 'aria-selected': k === sec ? 'true' : 'false', onclick: () => go(m.id, k) },
+        h('span', { class: 'tab-name' }, t, h('kbd', {}, i + 1)), h('span', { class: 'sub' }, sub))));
     workPane.replaceChildren(renderHeader(m), tabs, sections[sec](m));
   }
 
@@ -157,7 +161,7 @@
     const conf = state.conf[m.id];
     const b = L.buildPrepBrief(m, conf);
     if (state.agenda[m.id] == null) state.agenda[m.id] = b.agenda.join('\n');
-    const ICON = { customer_statement: '💬', internal_note: '📝', record: '📄' };
+    const ICON = { customer_statement: '“', internal_note: '✎', record: '▤' };
     const KCLS = { customer_statement: ' cust', internal_note: ' note', record: ' rec' };
     const evItem = (e) => h('div', { class: 'ev' + KCLS[e.kind] + (e.stale ? ' stale' : '') + (e.conflict ? ' conflict' : '') },
       h('div', { class: 'row' }, h('span', { class: 'ico', 'aria-hidden': 'true' }, ICON[e.kind]), badge(...KIND_LABEL[e.kind]), e.open ? badge('Open item', 'warn') : null, e.stale ? badge('Stale (' + L.STALE_DAYS + '+ days)', 'warn') : null, e.conflict ? badge(`Conflicts with ${e.conflictsWith}`, 'bad') : null, h('span', { class: 'muted' }, `${e.id}`)),
@@ -168,7 +172,7 @@
     const internal = b.items.filter((e) => e.kind !== 'customer_statement');
 
     const attention = h('div', { class: 'attention' + (b.missing.length ? '' : ' clear') },
-      h('h2', {}, b.missing.length ? `⚠️ Needs your attention (${b.missing.length})` : '✅ Nothing flagged'),
+      h('h2', {}, b.missing.length ? `Needs your attention (${b.missing.length})` : 'Nothing flagged'),
       h('ul', {}, b.missing.map((x) => h('li', {}, x))));
     return h('div', { class: 'two-col' },
       h('div', { class: 'stack' },
@@ -230,7 +234,7 @@
       h('ul', { class: 'plain', style: 'padding-bottom:12px' }, INTEGRATIONS.map(([n, what]) => h('li', {}, h('strong', {}, n), `: ${what}. `, badge('Not connected', 'plain')))),
       h('p', { class: 'muted' }, 'The uploaded brief stands in for these sources until real, authorized connections exist.'));
 
-    if (!cur) return h('div', { class: 'stack' }, intake, integ, h('div', { class: 'card empty' }, h('div', { class: 'big' }, '📋'), h('h2', {}, 'No brief yet'), h('p', {}, 'Add an account brief above to see a summary of the account, the last call, support and what each attendee cares about.')));
+    if (!cur) return h('div', { class: 'stack' }, intake, integ, h('div', { class: 'card empty' }, h('div', { class: 'big' }, '✦'), h('h2', {}, 'The playbill is blank'), h('p', {}, 'Add an account brief above to see a summary of the account, the last call, support and what each attendee cares about.')));
 
     const s = cur.summary, days = s.contract.days;
     const renewal = days == null ? 'Unknown' : days >= 0 ? `In ${days} days` : `${-days} days ago`;
@@ -252,7 +256,7 @@
           tile('Open tickets', `${s.tickets.open.length}${oh ? ` (${oh} high)` : ''}`, oh ? 'bad' : s.tickets.open.length ? 'warn' : 'ok'),
           tile('Likely sentiment', L.MOODS[mood.mood].label, mood.mood === 'friendly' ? 'ok' : 'warn')),
         h('p', { class: 'muted' }, `Usage health: ${s.usage.health} (demo thresholds: utilization 40% and 70%, create-to-PR 25% and 50%).`)),
-      s.missing.length || s.flagged.length || s.warnings.length ? h('div', { class: 'attention' }, h('h2', {}, '⚠️ About this brief'),
+      s.missing.length || s.flagged.length || s.warnings.length ? h('div', { class: 'attention' }, h('h2', {}, 'About this brief'),
         h('ul', {}, s.missing.length ? h('li', {}, `Sections missing or empty: ${s.missing.join(', ')}.`) : null,
           s.flagged.length ? h('li', {}, `${s.flagged.length} line(s) looked like instructions and were ignored.`) : null,
           s.warnings.map((w) => h('li', {}, w)))) : null,
@@ -316,7 +320,7 @@
           h('div', { class: 'row' }, badge(b.label, KIND[b.type]), b.likely ? badge('Most likely for this mood', 'plain') : null),
           h('div', {}, b.text),
           h('div', { class: 'muted' }, b.generic ? 'Generic simulated reply.' : 'Grounded in: ' + b.basis.join(', ')),
-          h('div', { class: 'hint' }, '💡 ' + b.hint),
+          h('div', { class: 'hint' }, 'Try next: ' + b.hint),
           h('button', { class: 'secondary', onclick: () => pick(b) }, 'Continue with this response'))))) : null,
       input, h('div', { class: 'row' }, h('button', { onclick: send }, 'Send'),
         h('button', { class: 'secondary', onclick: () => { r.feedback = L.rolePlayFeedback(r.log.filter((x) => x.from === 'user').map((x) => x.text), { explored: r.explored }); r.active = false; r.pending = null; renderWork(); } }, 'End rehearsal and get feedback')));
@@ -411,12 +415,39 @@
       d.nextSteps.length ? h('div', {}, h('strong', {}, 'Next steps'), h('ul', { class: 'plain' }, d.nextSteps.map((x) => h('li', {}, `${x.text} (${own(x)})`)))) : null);
   }
 
+  /* ---------- Sound Check ---------- */
+  function renderSoundCheck(m) {
+    const conf = state.conf[m.id];
+    if (state.agenda[m.id] == null) state.agenda[m.id] = L.buildPrepBrief(m, conf).agenda.join('\n');
+    const manual = (state.soundcheck[m.id] = state.soundcheck[m.id] || { consent: false, notes: false });
+    const sc = L.soundCheck(m, conf, { hasBrief: !!getBrief(m), agendaText: state.agenda[m.id] });
+    const manualLeft = sc.manual.filter((x) => !manual[x.id]).length;
+    const ready = sc.blocking === 0 && manualLeft === 0;
+    return h('div', { class: 'stack' },
+      h('div', { class: 'card stack' }, h('h2', {}, 'Sound Check'), h('p', { class: 'muted' }, 'A two-minute readiness check before you go on. Pre-call check.'),
+        h('ul', { class: 'checklist' }, sc.items.map((i) => h('li', {}, h('span', { class: 'mark ' + (i.ok ? 'ok' : i.optional ? 'opt' : 'bad'), 'aria-hidden': 'true' }, i.ok ? '✓' : i.optional ? '–' : '!'),
+          h('div', {}, h('strong', {}, i.label), i.optional ? h('span', { class: 'muted' }, ' (optional)') : null, h('div', { class: 'muted' }, i.detail))))),
+        h('h3', {}, 'Your checks'),
+        h('ul', { class: 'checklist' }, sc.manual.map((x) => h('li', {}, h('input', { type: 'checkbox', id: 'sc-' + x.id, checked: manual[x.id] ? true : null, onchange: (e) => { manual[x.id] = e.target.checked; renderWork(); } }),
+          h('label', { for: 'sc-' + x.id }, x.label)))),
+        h('p', { class: 'muted' }, 'Consent rules vary by place and company. Callback does not record anything.')),
+      h('div', { class: 'card ' + (ready ? 'ready' : '') }, h('div', { class: 'row' },
+        badge(ready ? 'Ready for showtime' : `${sc.blocking + manualLeft} item(s) still need you`, ready ? 'ok' : 'warn'),
+        h('button', { onclick: () => go(m.id, 'live') }, 'Go to Showtime'))));
+  }
+
+  function renderShowtime(m) {
+    return h('div', { class: 'card empty' }, h('div', { class: 'big', 'aria-hidden': 'true' }, '★'), h('h2', {}, 'Showtime is not built yet'),
+      h('p', {}, 'This is the live-call stage: a call sheet with your agenda and questions, a notes box, and quick capture for learnings, commitments and next steps. A transcript and notes agent would plug in later, only after a real connection exists.'),
+      h('div', { class: 'row', style: 'justify-content:center' }, h('button', { class: 'secondary', onclick: () => go(m.id, 'soundcheck') }, 'Back to Sound Check'), h('button', { class: 'secondary', onclick: () => go(m.id, 'coaching') }, 'Skip to Notes')));
+  }
+
   /* ---------- init ---------- */
   buildShell();
   window.addEventListener('hashchange', renderWork);
   window.addEventListener('keydown', (e) => {
     const r = route(); const i = Number(e.key) - 1;
-    if (!r.id || e.metaKey || e.ctrlKey || e.altKey || !(i >= 0 && i < 5)) return;
+    if (!r.id || e.metaKey || e.ctrlKey || e.altKey || !(i >= 0 && i < TAB_KEYS.length)) return;
     if (/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName)) return;
     go(r.id, TAB_KEYS[i]);
   });

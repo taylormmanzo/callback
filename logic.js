@@ -413,8 +413,30 @@
     }));
   }
 
+  /* ---------- Sound Check: quick pre-call readiness ---------- */
+  function soundCheck(m, conf, ctx) {
+    const cust = customerView(m, conf);
+    const open = m.participants.filter((p) => !p.internal).filter((p) => { const v = participantView(p, conf); return !(reliable(v.status) || v.byUser); });
+    const lines = String((ctx && ctx.agendaText) || '').split('\n').map((s) => s.trim()).filter(Boolean);
+    const custOk = reliable(cust.status) || cust.byUser;
+    const items = [
+      { id: 'customer', label: 'Customer match confirmed', ok: custOk, detail: custOk ? 'Done.' : 'Confirm or correct the customer in the meeting header.' },
+      { id: 'attendees', label: 'Attendees matched to contacts', ok: open.length === 0, detail: open.length ? `Still to confirm: ${open.map((p) => p.name).join(', ')}.` : 'Done.' },
+      { id: 'agenda', label: 'Agenda ready', ok: lines.length > 0, detail: lines.length ? `${lines.length} item(s).` : 'Add at least one agenda item in Green Room.' },
+      { id: 'brief', label: 'Account brief loaded', ok: !!(ctx && ctx.hasBrief), optional: true, detail: ctx && ctx.hasBrief ? 'Loaded.' : 'Optional, but it grounds the call sheet and rehearsal.' }
+    ];
+    return {
+      items,
+      blocking: items.filter((i) => !i.ok && !i.optional).length,
+      manual: [
+        { id: 'consent', label: 'Customer consent to record or transcribe obtained (or recording stays off)' },
+        { id: 'notes', label: 'Call sheet and notes box open' }
+      ]
+    };
+  }
+
   root.MW_LOGIC = {
-    parseBrief, summarizeBrief, personasFor, MOODS, classifyTopic, rehearsalContext, rehearsalBranches,
+    soundCheck, parseBrief, summarizeBrief, personasFor, MOODS, classifyTopic, rehearsalContext, rehearsalBranches,
     NOW, STALE_DAYS, LIMITS, isStale, isInstructionLike, isOpenEnded, reliable,
     customerView, participantView, participantRole, participantName, speakerName,
     buildDiscoveryQuestions, buildPrepBrief, rolePlayReply, rolePlayFeedback,
