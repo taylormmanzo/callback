@@ -120,3 +120,8 @@ ol.questions li::before { content: counter(q); flex: none; width: 26px; height: 
 .preview { border: 2px dashed var(--ok); border-radius: 12px; padding: 14px; margin-top: 10px; background: var(--ok-bg); }
 .empty { text-align: center; padding: 64px 24px; color: var(--muted); }
 .empty .big { font-size: 48px; } .empty h2 { color: var(--text); margin-top: 8px; }
+
+.branches { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 12px; }
+.branch { border: 1px solid var(--line); border-top: 4px solid var(--line); border-radius: 12px; padding: 12px; background: var(--panel); display: grid; gap: 8px; align-content: start; }
+.branch.engaged { border-top-color: var(--ok); } .branch.unsure { border-top-color: var(--warn); } .branch.pushback { border-top-color: var(--bad); }
+.branch .hint { background: var(--accent-bg); color: var(--accent); border-radius: 8px; padding: 6px 10px; font-size: 13px; }

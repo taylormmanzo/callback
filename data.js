@@ -169,7 +169,62 @@
     }
   ];
 
-  const DATA = { source: SOURCE, customers, contacts, meetings };
+  /* Synthetic account briefs: stand-ins for CRM, call recording, Slack, BigQuery, support and content integrations. */
+  const sampleBriefs = {
+    cust_nw: [
+      '# Account brief: Northwind Freight (synthetic)', '',
+      '## Journey', 'stage: Pilot planning', 'customer since: 2026-03-10', '',
+      '## Contract', 'plan: Enterprise (synthetic)', 'renewal date: 2027-02-28', 'term: 12 months', '',
+      '## Usage', 'period: last 30 days', 'credit utilization: 34%', 'active users: 18 of 60 seats', 'created: 140', 'pr submitted: 21', '',
+      '## Last call', 'date: 2026-11-12',
+      '- Priya wants dispatcher onboarding cut from three weeks to one.',
+      '- Marcus says SSO and security sign-off block the pilot.', '',
+      '## Next steps',
+      '- [ ] Send SSO security questionnaire answers (owner: Sam)',
+      '- [x] Schedule follow-up working session (owner: Sam)',
+      '- [ ] Security lead review of the questionnaire (owner: Marcus)', '',
+      '## Support tickets',
+      '- NW-101 (open, high) SSO login loop on staging',
+      '- NW-097 (closed, normal) Billing contact update', '',
+      '## Persona priorities',
+      '- VP Operations: faster dispatcher onboarding; predictable cost',
+      '- IT Director: SSO and security review; audit logging', '',
+      '## Open questions',
+      '- What the AI initiatives are for the next 90 days',
+      '- Who owns the final security sign-off', ''
+    ].join('\n'),
+    cust_cb: [
+      '# Account brief: Cobalt Retail (synthetic)', '',
+      '## Journey', 'stage: Renewal', 'customer since: 2025-12-15', '',
+      '## Contract', 'plan: Team (synthetic)', 'renewal date: 2026-12-31', 'term: 12 months', '',
+      '## Usage', 'period: last 30 days', 'credit utilization: 71%', 'active users: 40 of 55 seats', 'created: 200', 'pr submitted: 104', '',
+      '## Last call', 'date: 2026-11-17',
+      '- Pricing must be compared against two alternatives before a decision.', '',
+      '## Next steps',
+      '- [ ] Put together a price comparison sheet (owner: Sam)', '',
+      '## Support tickets',
+      '- CR-210 (open, normal) Store systems report export is slow',
+      '- CR-205 (open, normal) SSO group mapping question', '',
+      '## Persona priorities',
+      '- Head of Procurement: clear price comparison; contract flexibility',
+      '- Store Systems Lead: stability; fast support', '',
+      '## Open questions',
+      '- Exact date of the internal board review', ''
+    ].join('\n')
+  };
+  const briefTemplate = [
+    '# Account brief: <customer name>', '',
+    '## Journey', 'stage: ', 'customer since: YYYY-MM-DD', '',
+    '## Contract', 'plan: ', 'renewal date: YYYY-MM-DD', '',
+    '## Usage', 'credit utilization: 0%', 'created: 0', 'pr submitted: 0', '',
+    '## Last call', 'date: YYYY-MM-DD', '- Key point', '',
+    '## Next steps', '- [ ] Open action item (owner: Name)', '- [x] Finished action item (owner: Name)', '',
+    '## Support tickets', '- ID-1 (open, high) Ticket title', '',
+    '## Persona priorities', '- Role title: priority one; priority two', '',
+    '## Open questions', '- Something you do not know yet', ''
+  ].join('\n');
+
+  const DATA = { source: SOURCE, customers, contacts, meetings, sampleBriefs, briefTemplate };
   if (typeof module !== 'undefined' && module.exports) module.exports = DATA;
   root.MW_DATA = DATA;
 })(typeof window !== 'undefined' ? window : globalThis);

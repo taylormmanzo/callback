@@ -141,7 +141,7 @@
     return { text: GENERIC_CONCERNS[turnIndex % GENERIC_CONCERNS.length], basis: [], generic: true };
   }
 
-  function rolePlayFeedback(userMessages) {
+  function rolePlayFeedback(userMessages, opts) {
     const msgs = userMessages.map((s) => s.trim()).filter(Boolean);
     if (!msgs.length) return { empty: true, strengths: [], improvements: ['You ended before sending any message, so there is nothing to assess. Try opening with a purpose statement and one open question.'], metrics: { turns: 0 } };
     const questions = msgs.filter((s) => /\?/.test(s));
@@ -157,6 +157,12 @@
     if (closed.length) improvements.push(`"${closed[0]}" can be answered yes or no. Rephrase it to start with "What" or "How".`);
     (ack ? strengths : improvements).push(ack ? 'You acknowledged the concern before moving on.' : 'You did not acknowledge any concern. Reflect it back ("That makes sense, because...") before responding.');
     (close ? strengths : improvements).push(close ? 'You moved toward concrete next steps.' : 'You did not propose a next step. End by naming an owner and date.');
+    const explored = opts && opts.explored;
+    if (explored) {
+      const missing = ['engaged', 'unsure', 'pushback'].filter((x) => !explored.includes(x));
+      if (missing.length) improvements.push(`You practiced ${explored.length} of 3 customer response types. Replay and pick the ${missing.join(' and ')} branch to be ready for it.`);
+      else strengths.push('You practiced all three response types: engaged, unsure and pushback.');
+    }
     return { empty: false, strengths, improvements, metrics: { turns: msgs.length, open: open.length, closed: closed.length, agenda, ack, close } };
   }
 
@@ -255,7 +261,160 @@
     return { available: true, learnings, sentiment, nextSteps, notes };
   }
 
+  /* ---------- Account brief (user-uploaded stand-in for future integrations) ---------- */
+  const BRIEF_MAX = 200000;
+  const lc = (s) => (s ? s.charAt(0).toLowerCase() + s.slice(1) : s);
+
+  function parseBrief(text) {
+    const warnings = [], flagged = [], sections = {};
+    let src = String(text || '');
+    if (src.length > BRIEF_MAX) { src = src.slice(0, BRIEF_MAX); warnings.push('Brief was longer than 200,000 characters and was truncated.'); }
+    let cur = null;
+    src.split(/\r?\n/).forEach((raw) => {
+      const line = raw.trim();
+      if (!line) return;
+      const hm = line.match(/^#{2,3}\s+(.+)$/);
+      if (hm) { cur = hm[1].trim().toLowerCase(); sections[cur] = sections[cur] || []; return; }
+      if (/^#\s/.test(line) || !cur) return;
+      if (isInstructionLike(line)) { flagged.push(line); return; }
+      sections[cur].push(line);
+    });
+    return { sections, flagged, warnings };
+  }
+
+  const kvOf = (lines) => {
+    const o = {};
+    (lines || []).forEach((l) => { const m = l.match(/^([A-Za-z][A-Za-z ]*?):\s*(.+)$/); if (m && !/^[-*]/.test(l)) o[m[1].toLowerCase()] = m[2].trim(); });
+    return o;
+  };
+  const bulletsOf = (lines) => (lines || []).map((l) => (l.match(/^[-*]\s+(.*)$/) || [])[1]).filter(Boolean);
+  const toNum = (s) => { const n = parseFloat(String(s || '').replace(/[^0-9.]/g, '')); return Number.isFinite(n) ? n : null; };
+  const rank = (v, lo, hi) => (v == null ? null : v < lo ? 0 : v < hi ? 1 : 2);
+  const RANKS = ['low', 'moderate', 'healthy'];
+
+  function summarizeBrief(parsed, now) {
+    const S = parsed.sections, today = now || NOW;
+    const journey = kvOf(S.journey), contract = kvOf(S.contract), usage = kvOf(S.usage), call = kvOf(S['last call']);
+    const days = contract['renewal date'] ? Math.ceil((new Date(contract['renewal date']) - today) / 86400000) : null;
+    const utilNum = toNum(usage['credit utilization']);
+    const created = toNum(usage.created), pr = toNum(usage['pr submitted']);
+    const throughput = created ? pr / created : null;
+    const ranks = [rank(utilNum, 40, 70), rank(throughput, 0.25, 0.5)].filter((x) => x != null);
+    const health = ranks.length ? RANKS[Math.min(...ranks)] : 'unknown';
+
+    const steps = bulletsOf(S['next steps']).map((b) => {
+      const m = b.match(/^\[( |x)\]\s*(.*)$/i);
+      const body = m ? m[2] : b, own = body.match(/\(owner:\s*([^)]+)\)/i);
+      return { text: body.replace(/\s*\(owner:[^)]+\)/i, ''), owner: own ? own[1].trim() : null, done: !!m && m[1].toLowerCase() === 'x' };
+    });
+    const tickets = bulletsOf(S['support tickets']).map((b) => {
+      const m = b.match(/^(\S+)\s*\((open|closed)(?:\s*,\s*(high|normal|low))?\)\s*(.*)$/i);
+      return m ? { id: m[1], open: m[2].toLowerCase() === 'open', priority: (m[3] || 'normal').toLowerCase(), title: m[4] } : null;
+    }).filter(Boolean);
+    const personas = bulletsOf(S['persona priorities']).map((b) => {
+      const i = b.indexOf(':');
+      return i < 0 ? null : { role: b.slice(0, i).trim(), priorities: b.slice(i + 1).split(';').map((x) => x.trim()).filter(Boolean) };
+    }).filter(Boolean);
+    const openTickets = tickets.filter((t) => t.open);
+    const openHigh = openTickets.filter((t) => t.priority === 'high');
+    const inWindow = days != null && days >= 0 && days <= 90;
+
+    // Likely sentiment: default skeptical; friendly only when risk signals are absent and positives are present.
+    const risk = [], pos = [];
+    if (utilNum != null && utilNum < 40) risk.push(`Credit utilization is low (${utilNum}%).`);
+    if (throughput != null && throughput < 0.25) risk.push(`Few runs reach a submitted PR (${Math.round(throughput * 100)}%).`);
+    if (openHigh.length) risk.push(`${openHigh.length} high-priority support ticket(s) are open.`);
+    if (inWindow) risk.push(`Renewal is ${days} days away (inside the 90-day window).`);
+    if (utilNum != null && utilNum >= 70) pos.push(`Credit utilization is strong (${utilNum}%).`);
+    if (throughput != null && throughput >= 0.5) pos.push(`Most runs reach a submitted PR (${Math.round(throughput * 100)}%).`);
+    if (tickets.length && !openTickets.length) pos.push('No open support tickets.');
+    const friendly = !risk.length && pos.length >= 2;
+    const sentiment = {
+      mood: friendly ? 'friendly' : 'skeptical',
+      reasons: friendly ? pos : (risk.length ? risk : ['Not enough signals to move off the skeptical default.']),
+      note: 'Inference from the uploaded brief, not knowledge of how any person feels.'
+    };
+
+    const names = { journey: 'Journey', contract: 'Contract', usage: 'Usage', 'last call': 'Last call', 'next steps': 'Next steps', 'support tickets': 'Support tickets', 'persona priorities': 'Persona priorities', 'open questions': 'Open questions' };
+    const missing = Object.keys(names).filter((k) => !(S[k] && S[k].length)).map((k) => names[k]);
+    return {
+      journey: { stage: journey.stage || null, since: journey['customer since'] || null },
+      contract: { plan: contract.plan || null, renewalDate: contract['renewal date'] || null, days, window: inWindow },
+      usage: { period: usage.period || null, util: usage['credit utilization'] || null, utilNum, activeUsers: usage['active users'] || null, created, pr, throughput, health },
+      lastCall: { date: call.date || null, points: bulletsOf(S['last call']) },
+      nextSteps: { open: steps.filter((s) => !s.done), done: steps.filter((s) => s.done) },
+      tickets: { open: openTickets, closed: tickets.filter((t) => !t.open), openHigh },
+      personas, openQuestions: bulletsOf(S['open questions']),
+      sentiment, missing, flagged: parsed.flagged, warnings: parsed.warnings
+    };
+  }
+
+  const personasFor = (summary, role) => (summary && role ? summary.personas.filter((p) => p.role.toLowerCase() === role.toLowerCase()) : []);
+
+  /* ---------- Branching rehearsal ---------- */
+  const MOODS = {
+    skeptical: { label: 'Skeptical', order: ['pushback', 'unsure', 'engaged'], lead: { pushback: 'Let me be direct. ', engaged: "Cautiously, I'm open to it. ", unsure: 'Honestly? ' } },
+    rushed: { label: 'Rushed', order: ['pushback', 'engaged', 'unsure'], lead: { pushback: 'I only have a few minutes. ', engaged: 'Quick answer. ', unsure: 'No time to dig in. ' } },
+    friendly: { label: 'Friendly', order: ['engaged', 'unsure', 'pushback'], lead: { pushback: 'Small thing, though. ', engaged: 'Great question. ', unsure: 'Good one. ' } },
+    frustrated: { label: 'Frustrated', order: ['pushback', 'unsure', 'engaged'], lead: { pushback: 'Frankly, this has been frustrating. ', engaged: 'Fine. ', unsure: "Frankly, I don't know. " } }
+  };
+  const HINTS = {
+    engaged: 'Go deeper: ask what success looks like and who else needs to be involved.',
+    unsure: "Don't push for an answer. Offer a smaller first step, e.g. \"What would you need to see to commit to one use case?\"",
+    pushback: 'Acknowledge it, then ask "What would resolving that look like for you?" and return to the goal.'
+  };
+
+  function classifyTopic(text) {
+    const t = String(text).toLowerCase();
+    if (/\b(ai|initiative|roadmap|90 days|next quarter|priorit)/.test(t)) return 'initiatives';
+    if (/\b(block|getting in the way|stuck|challenge|barrier)/.test(t)) return 'blockers';
+    if (/\b(usage|credit|adoption|using|utiliz|workflow)/.test(t)) return 'usage';
+    if (/\b(renew|contract|budget|pricing|price|cost|term)/.test(t)) return 'contract';
+    if (/\b(ticket|support|issue|bug|outage)/.test(t)) return 'support';
+    if (/\b(next step|follow.?up|action item|last call|last time)/.test(t)) return 'followup';
+    return 'general';
+  }
+
+  function rehearsalContext(m, participantId, summary, mood, role) {
+    const own = participantId ? personaEvidence(m, participantId).find((e) => e.concern) : null;
+    const pri = (personasFor(summary, role)[0] || {}).priorities || [];
+    let concern;
+    if (own) concern = { text: own.concern, basis: [own.id] };
+    else if (summary && summary.tickets.openHigh.length) concern = { text: `We still have an open high-priority ticket: ${summary.tickets.openHigh[0].title}. That needs fixing first.`, basis: ['brief: support tickets'] };
+    else if (summary && summary.usage.utilNum != null && summary.usage.utilNum < 40) concern = { text: `We've used only ${summary.usage.util} of our credits, so I'm not convinced we're getting value yet.`, basis: ['brief: usage'] };
+    else if (summary && summary.nextSteps.open.length) concern = { text: `We're still waiting on: ${lc(summary.nextSteps.open[0].text)}.`, basis: ['brief: next steps'] };
+    else concern = { text: 'Why should this be a priority for us right now?', basis: [] };
+    return { mood: MOODS[mood] ? mood : 'skeptical', role: role || null, summary: summary || null, concern,
+      focus: pri[0] || null, unknown: summary && summary.openQuestions[0] ? summary.openQuestions[0] : null };
+  }
+
+  function rehearsalBranches(ctx, userText) {
+    const topic = classifyTopic(userText), S = ctx.summary, mood = MOODS[ctx.mood];
+    const BR = 'brief: ';
+    const tickets = S ? S.tickets : null;
+    const engaged = {
+      initiatives: ctx.focus ? [`Over the next 90 days we're focused on ${ctx.focus}.`, [BR + 'persona priorities']] : ['We have a couple of priorities for the next 90 days and I can walk you through them.', []],
+      blockers: tickets && tickets.openHigh.length ? [`The main blocker is: ${tickets.openHigh[0].title}.`, [BR + 'support tickets']] : ['Mostly internal approvals and time. I can go into detail.', []],
+      usage: S && S.usage.util ? [`We're at ${S.usage.util} credit utilization and want to grow it.`, [BR + 'usage']] : ['Usage is growing and we want to extend it to more teams.', []],
+      contract: S && S.contract.renewalDate ? [`Our renewal is on ${S.contract.renewalDate}. We'll decide closer to then.`, [BR + 'contract']] : ["We'd need to look at budget before talking terms.", []],
+      support: tickets && tickets.open.length ? [`We have ${tickets.open.length} open ticket(s) and are waiting on fixes.`, [BR + 'support tickets']] : ["Support has been fine. Nothing big is open.", []],
+      followup: S && S.nextSteps.open.length ? [`From last time, we're still waiting on: ${lc(S.nextSteps.open[0].text)}.`, [BR + 'next steps']] : ['From our side, the follow-ups are in hand.', []],
+      general: ['That works for me. Go ahead.', []]
+    }[topic];
+    const unsure = ctx.unknown
+      ? [`We haven't worked this out yet: ${lc(ctx.unknown)}.`, [BR + 'open questions']]
+      : [topic === 'general' ? "I'm not sure that's the right focus. What are you hoping to get out of this?" : "I don't have a clear answer to that yet.", []];
+    const pushback = topic === 'general' ? ['I have limited time. What do you need from me?', []] : [ctx.concern.text, ctx.concern.basis];
+    const parts = { engaged, unsure, pushback };
+    const labels = { engaged: 'Engaged', unsure: 'Unsure', pushback: 'Pushback' };
+    return mood.order.map((type, i) => ({
+      type, label: labels[type], topic, likely: i === 0,
+      text: mood.lead[type] + parts[type][0], basis: parts[type][1], generic: parts[type][1].length === 0, hint: HINTS[type]
+    }));
+  }
+
   root.MW_LOGIC = {
+    parseBrief, summarizeBrief, personasFor, MOODS, classifyTopic, rehearsalContext, rehearsalBranches,
     NOW, STALE_DAYS, LIMITS, isStale, isInstructionLike, isOpenEnded, reliable,
     customerView, participantView, participantRole, participantName, speakerName,
     buildDiscoveryQuestions, buildPrepBrief, rolePlayReply, rolePlayFeedback,
