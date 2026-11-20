@@ -413,8 +413,56 @@
     }));
   }
 
+  /* ---------- Sound Check: quick pre-call readiness ---------- */
+  function soundCheck(m, conf, ctx) {
+    const cust = customerView(m, conf);
+    const open = m.participants.filter((p) => !p.internal).filter((p) => { const v = participantView(p, conf); return !(reliable(v.status) || v.byUser); });
+    const lines = String((ctx && ctx.agendaText) || '').split('\n').map((s) => s.trim()).filter(Boolean);
+    const custOk = reliable(cust.status) || cust.byUser;
+    const items = [
+      { id: 'customer', label: 'Customer match confirmed', ok: custOk, detail: custOk ? 'Done.' : 'Confirm or correct the customer in the meeting header.' },
+      { id: 'attendees', label: 'Attendees matched to contacts', ok: open.length === 0, detail: open.length ? `Still to confirm: ${open.map((p) => p.name).join(', ')}.` : 'Done.' },
+      { id: 'agenda', label: 'Agenda ready', ok: lines.length > 0, detail: lines.length ? `${lines.length} item(s).` : 'Add at least one agenda item in Green Room.' },
+      { id: 'brief', label: 'Account brief loaded', ok: !!(ctx && ctx.hasBrief), optional: true, detail: ctx && ctx.hasBrief ? 'Loaded.' : 'Optional, but it grounds the call sheet and rehearsal.' }
+    ];
+    return {
+      items,
+      blocking: items.filter((i) => !i.ok && !i.optional).length,
+      manual: [
+        { id: 'consent', label: 'Customer consent to record or transcribe obtained (or recording stays off)' },
+        { id: 'notes', label: 'Call sheet and notes box open' }
+      ]
+    };
+  }
+
+  /* ---------- Showtime: call sheet and live capture (nothing is recorded) ---------- */
+  const CAPTURE_KINDS = ['learning', 'commitment', 'concern', 'next_step'];
+
+  // A capture is exactly what the user typed. Owner and due stay null unless the user supplies them.
+  function makeCapture(kind, text, opts) {
+    const t = String(text || '').trim();
+    if (!CAPTURE_KINDS.includes(kind) || !t) return null;
+    const o = opts || {};
+    return { kind, text: t, owner: String(o.owner || '').trim() || null, due: String(o.due || '').trim() || null, at: typeof o.atMs === 'number' ? o.atMs : null };
+  }
+
+  function callSheet(m, conf, summary, agendaText) {
+    const agenda = String(agendaText || '').split('\n').map((s) => s.trim()).filter(Boolean);
+    const attendees = m.participants.filter((p) => !p.internal).map((p) => ({ name: p.name, role: participantRole(p, conf) }));
+    const facts = [];
+    if (summary) {
+      const d = summary.contract.days;
+      if (d != null) facts.push(['Renewal', d >= 0 ? `In ${d} days` : `${-d} days ago`]);
+      if (summary.usage.util) facts.push(['Credit use', summary.usage.util]);
+      if (summary.tickets.openHigh.length) facts.push(['Open ticket', `${summary.tickets.openHigh[0].id}, ${summary.tickets.openHigh[0].title} (high)`]);
+      else if (summary.tickets.open.length) facts.push(['Open tickets', String(summary.tickets.open.length)]);
+      facts.push(['Likely mood', `${MOODS[summary.sentiment.mood].label} (inference)`]);
+    }
+    return { agenda, questions: buildDiscoveryQuestions(m, conf).questions, attendees, facts, hasBrief: !!summary };
+  }
+
   root.MW_LOGIC = {
-    parseBrief, summarizeBrief, personasFor, MOODS, classifyTopic, rehearsalContext, rehearsalBranches,
+    CAPTURE_KINDS, makeCapture, callSheet, soundCheck, parseBrief, summarizeBrief, personasFor, MOODS, classifyTopic, rehearsalContext, rehearsalBranches,
     NOW, STALE_DAYS, LIMITS, isStale, isInstructionLike, isOpenEnded, reliable,
     customerView, participantView, participantRole, participantName, speakerName,
     buildDiscoveryQuestions, buildPrepBrief, rolePlayReply, rolePlayFeedback,

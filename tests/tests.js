@@ -223,6 +223,42 @@
     L.rehearsalBranches(L.rehearsalContext(M('m_nw_2'), 'p_marcus', s, 'rushed', 'IT Director'), 'What about usage?');
     eq(JSON.stringify(D), copy); eq(JSON.stringify(s), before);
   });
+  test('sound check: blocks on unresolved matches, clears when you resolve them', () => {
+    const agendaText = 'Confirm purpose';
+    eq(L.soundCheck(M('m_nw_1'), undefined, { agendaText }).blocking, 0);
+    const hv = L.soundCheck(M('m_hv'), undefined, { agendaText });
+    eq(hv.blocking, 2); assert(hv.items.find((i) => i.id === 'attendees').detail.includes('Jordan Alvarez'));
+    const resolved = { customer: { id: 'cust_hvc' }, participants: { p_jordan: { contactId: 'c_ja1' } } };
+    eq(L.soundCheck(M('m_hv'), resolved, { agendaText }).blocking, 0);
+    const dana = L.soundCheck(M('m_nw_2'), undefined, { agendaText });
+    eq(dana.blocking, 1);
+    eq(L.soundCheck(M('m_nw_2'), { participants: { p_dana: { contactId: null } } }, { agendaText }).blocking, 0);
+  });
+  test('sound check: agenda required, brief optional, consent is a manual item', () => {
+    const c = L.soundCheck(M('m_nw_1'), undefined, { agendaText: '  \n' });
+    eq(c.blocking, 1); eq(c.items.find((i) => i.id === 'agenda').ok, false);
+    const brief = c.items.find((i) => i.id === 'brief'); assert(brief.optional && !brief.ok);
+    assert(c.manual.some((x) => x.id === 'consent'));
+  });
+  test('showtime: captures are verbatim and never invent owners or dates', () => {
+    const c = L.makeCapture('commitment', '  Send questionnaire answers ', { owner: ' ', due: '', atMs: 65000 });
+    eq([c.text, c.owner, c.due, c.at], ['Send questionnaire answers', null, null, 65000]);
+    const d = L.makeCapture('next_step', 'Review', { owner: 'Sam', due: 'Friday' });
+    eq([d.owner, d.due, d.at], ['Sam', 'Friday', null]);
+    eq(L.makeCapture('commitment', '   '), null); eq(L.makeCapture('mood', 'x'), null); eq(L.makeCapture('learning'), null);
+    eq(L.CAPTURE_KINDS, ['learning', 'commitment', 'concern', 'next_step']);
+  });
+  test('showtime: call sheet has three questions, parsed agenda, honest facts', () => {
+    const none = L.callSheet(M('m_nw_2'), undefined, null, 'One\n\n Two ');
+    eq(none.agenda, ['One', 'Two']); eq(none.questions.length, 3); eq(none.facts.length, 0); eq(none.hasBrief, false);
+    const s = L.callSheet(M('m_nw_2'), undefined, brief('cust_nw'), 'One');
+    assert(s.facts.some((f) => f[0] === 'Renewal' && f[1] === 'In 101 days'));
+    assert(s.facts.some((f) => f[0] === 'Open ticket' && /NW-101/.test(f[1])));
+    assert(s.facts.some((f) => f[0] === 'Likely mood' && /inference/.test(f[1])));
+    const hv = L.callSheet(M('m_hv'), undefined, null, 'x');
+    eq(hv.attendees[0].role, null, 'role hidden until the contact match is confirmed');
+    eq(L.callSheet(M('m_hv'), { participants: { p_jordan: { contactId: 'c_ja1' } } }, null, 'x').attendees[0].role, 'Operations Manager');
+  });
   test('rehearsal feedback reports branch coverage', () => {
     const f = L.rolePlayFeedback(['What is blocking you?'], { explored: ['pushback'] });
     assert(f.improvements.some((x) => /1 of 3/.test(x) && /engaged and unsure/.test(x)));

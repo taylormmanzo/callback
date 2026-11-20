@@ -10,7 +10,9 @@
     rehearsal: {},   // meetingId -> { roleId, active, log, feedback }
     draft: {},       // meetingId -> editable follow-through draft
     briefs: {},      // customerId or meetingId -> { text, summary, loadedAt }
-    briefDraft: {}   // unsaved brief text
+    briefDraft: {},  // unsaved brief text
+    soundcheck: {},  // meetingId -> { consent, notes } manual checks
+    live: {}         // meetingId -> { startedAt, endedAt, agendaDone, asked, notes, captures }
   };
 
   /* ---------- tiny DOM helper (text only; never innerHTML) ---------- */
@@ -79,16 +81,20 @@
   }
 
   /* ---------- workspace ---------- */
-  const TAB_KEYS = ['prep', 'context', 'rehearsal', 'coaching', 'follow'];
+  // [key, stage name, plain-English subtitle]
+  const STAGES = [['prep', 'Green Room', 'Prep'], ['context', 'Playbill', 'Customer context'], ['rehearsal', 'Dress Rehearsal', 'Practice'], ['soundcheck', 'Sound Check', 'Pre-call check'], ['live', 'Showtime', 'Live call'], ['coaching', 'Notes', 'Post-call coaching'], ['follow', 'Callback', 'Follow-up']];
+  const TAB_KEYS = STAGES.map((s) => s[0]);
   function renderWork() {
+    if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
     const { id, section } = route();
     renderList();
     const m = id && meetingById(id);
-    if (!m) { workPane.replaceChildren(h('div', { class: 'card empty' }, h('div', { class: 'big' }, '🗓️'), h('h2', {}, 'Pick a meeting to get started'), h('p', {}, 'Open any synthetic meeting on the left to prepare, rehearse, review and follow up.'))); return; }
-    const sections = { prep: renderPrep, context: renderContext, rehearsal: renderRehearsal, coaching: renderCoaching, follow: renderFollow };
+    if (!m) { workPane.replaceChildren(h('div', { class: 'card empty' }, h('div', { class: 'big', 'aria-hidden': 'true' }, '★'), h('h2', {}, 'The house is empty'), h('p', {}, 'Pick a synthetic meeting on the left to take the stage: prep in the Green Room, rehearse, run the show, then earn the callback.'))); return; }
+    const sections = { prep: renderPrep, context: renderContext, rehearsal: renderRehearsal, soundcheck: renderSoundCheck, live: renderShowtime, coaching: renderCoaching, follow: renderFollow };
     const sec = sections[section] ? section : 'prep';
-    const tabs = h('div', { class: 'tabs', role: 'tablist' }, [['prep', 'Prep'], ['context', 'Customer Context'], ['rehearsal', 'Dress Rehearsal'], ['coaching', 'Notes'], ['follow', 'Callback']].map(([k, t]) =>
-      h('button', { class: 'tab', role: 'tab', 'aria-selected': k === sec ? 'true' : 'false', onclick: () => go(m.id, k) }, t, h('kbd', {}, TAB_KEYS.indexOf(k) + 1))));
+    const tabs = h('div', { class: 'tabs', role: 'tablist' }, STAGES.map(([k, t, sub], i) =>
+      h('button', { class: 'tab', role: 'tab', 'aria-selected': k === sec ? 'true' : 'false', onclick: () => go(m.id, k) },
+        h('span', { class: 'tab-name' }, t, h('kbd', {}, i + 1)), h('span', { class: 'sub' }, sub))));
     workPane.replaceChildren(renderHeader(m), tabs, sections[sec](m));
   }
 
@@ -157,7 +163,7 @@
     const conf = state.conf[m.id];
     const b = L.buildPrepBrief(m, conf);
     if (state.agenda[m.id] == null) state.agenda[m.id] = b.agenda.join('\n');
-    const ICON = { customer_statement: '💬', internal_note: '📝', record: '📄' };
+    const ICON = { customer_statement: '“', internal_note: '✎', record: '▤' };
     const KCLS = { customer_statement: ' cust', internal_note: ' note', record: ' rec' };
     const evItem = (e) => h('div', { class: 'ev' + KCLS[e.kind] + (e.stale ? ' stale' : '') + (e.conflict ? ' conflict' : '') },
       h('div', { class: 'row' }, h('span', { class: 'ico', 'aria-hidden': 'true' }, ICON[e.kind]), badge(...KIND_LABEL[e.kind]), e.open ? badge('Open item', 'warn') : null, e.stale ? badge('Stale (' + L.STALE_DAYS + '+ days)', 'warn') : null, e.conflict ? badge(`Conflicts with ${e.conflictsWith}`, 'bad') : null, h('span', { class: 'muted' }, `${e.id}`)),
@@ -168,7 +174,7 @@
     const internal = b.items.filter((e) => e.kind !== 'customer_statement');
 
     const attention = h('div', { class: 'attention' + (b.missing.length ? '' : ' clear') },
-      h('h2', {}, b.missing.length ? `⚠️ Needs your attention (${b.missing.length})` : '✅ Nothing flagged'),
+      h('h2', {}, b.missing.length ? `Needs your attention (${b.missing.length})` : 'Nothing flagged'),
       h('ul', {}, b.missing.map((x) => h('li', {}, x))));
     return h('div', { class: 'two-col' },
       h('div', { class: 'stack' },
@@ -230,7 +236,7 @@
       h('ul', { class: 'plain', style: 'padding-bottom:12px' }, INTEGRATIONS.map(([n, what]) => h('li', {}, h('strong', {}, n), `: ${what}. `, badge('Not connected', 'plain')))),
       h('p', { class: 'muted' }, 'The uploaded brief stands in for these sources until real, authorized connections exist.'));
 
-    if (!cur) return h('div', { class: 'stack' }, intake, integ, h('div', { class: 'card empty' }, h('div', { class: 'big' }, '📋'), h('h2', {}, 'No brief yet'), h('p', {}, 'Add an account brief above to see a summary of the account, the last call, support and what each attendee cares about.')));
+    if (!cur) return h('div', { class: 'stack' }, intake, integ, h('div', { class: 'card empty' }, h('div', { class: 'big' }, '✦'), h('h2', {}, 'The playbill is blank'), h('p', {}, 'Add an account brief above to see a summary of the account, the last call, support and what each attendee cares about.')));
 
     const s = cur.summary, days = s.contract.days;
     const renewal = days == null ? 'Unknown' : days >= 0 ? `In ${days} days` : `${-days} days ago`;
@@ -252,7 +258,7 @@
           tile('Open tickets', `${s.tickets.open.length}${oh ? ` (${oh} high)` : ''}`, oh ? 'bad' : s.tickets.open.length ? 'warn' : 'ok'),
           tile('Likely sentiment', L.MOODS[mood.mood].label, mood.mood === 'friendly' ? 'ok' : 'warn')),
         h('p', { class: 'muted' }, `Usage health: ${s.usage.health} (demo thresholds: utilization 40% and 70%, create-to-PR 25% and 50%).`)),
-      s.missing.length || s.flagged.length || s.warnings.length ? h('div', { class: 'attention' }, h('h2', {}, '⚠️ About this brief'),
+      s.missing.length || s.flagged.length || s.warnings.length ? h('div', { class: 'attention' }, h('h2', {}, 'About this brief'),
         h('ul', {}, s.missing.length ? h('li', {}, `Sections missing or empty: ${s.missing.join(', ')}.`) : null,
           s.flagged.length ? h('li', {}, `${s.flagged.length} line(s) looked like instructions and were ignored.`) : null,
           s.warnings.map((w) => h('li', {}, w)))) : null,
@@ -316,7 +322,7 @@
           h('div', { class: 'row' }, badge(b.label, KIND[b.type]), b.likely ? badge('Most likely for this mood', 'plain') : null),
           h('div', {}, b.text),
           h('div', { class: 'muted' }, b.generic ? 'Generic simulated reply.' : 'Grounded in: ' + b.basis.join(', ')),
-          h('div', { class: 'hint' }, '💡 ' + b.hint),
+          h('div', { class: 'hint' }, 'Try next: ' + b.hint),
           h('button', { class: 'secondary', onclick: () => pick(b) }, 'Continue with this response'))))) : null,
       input, h('div', { class: 'row' }, h('button', { onclick: send }, 'Send'),
         h('button', { class: 'secondary', onclick: () => { r.feedback = L.rolePlayFeedback(r.log.filter((x) => x.from === 'user').map((x) => x.text), { explored: r.explored }); r.active = false; r.pending = null; renderWork(); } }, 'End rehearsal and get feedback')));
@@ -368,6 +374,15 @@
   }
 
   function renderFollow(m) {
+    const caps = liveOf(m.id).captures;
+    return h('div', { class: 'stack' },
+      caps.length ? h('div', { class: 'card' }, h('h2', {}, 'From Showtime: your captures'),
+        h('p', { class: 'muted' }, 'You entered these during the call. They are not added to the draft below automatically.'),
+        caps.map((c) => h('div', { class: 'cap' }, h('span', { class: 'cap-kind' }, CAP_LABEL[c.kind]), h('div', { style: 'flex:1;min-width:0' }, c.text, h('div', { class: 'muted' }, capLine(c)))))) : null,
+      renderFollowDraft(m));
+  }
+
+  function renderFollowDraft(m) {
     const d = getDraft(m), lim = L.LIMITS, locked = d.status !== 'draft';
     const field = (obj, key, label, tag) => h(tag || 'input', { 'aria-label': label, value: obj[key], disabled: locked, oninput: (e) => { obj[key] = e.target.value; } });
     const rm = (arr, i) => h('button', { class: 'secondary', disabled: locked, onclick: () => { arr.splice(i, 1); renderWork(); } }, 'Remove');
@@ -411,12 +426,115 @@
       d.nextSteps.length ? h('div', {}, h('strong', {}, 'Next steps'), h('ul', { class: 'plain' }, d.nextSteps.map((x) => h('li', {}, `${x.text} (${own(x)})`)))) : null);
   }
 
+  /* ---------- Sound Check ---------- */
+  function renderSoundCheck(m) {
+    const conf = state.conf[m.id];
+    if (state.agenda[m.id] == null) state.agenda[m.id] = L.buildPrepBrief(m, conf).agenda.join('\n');
+    const manual = (state.soundcheck[m.id] = state.soundcheck[m.id] || { consent: false, notes: false });
+    const sc = L.soundCheck(m, conf, { hasBrief: !!getBrief(m), agendaText: state.agenda[m.id] });
+    const manualLeft = sc.manual.filter((x) => !manual[x.id]).length;
+    const ready = sc.blocking === 0 && manualLeft === 0;
+    return h('div', { class: 'stack' },
+      h('div', { class: 'card stack' }, h('h2', {}, 'Sound Check'), h('p', { class: 'muted' }, 'A two-minute readiness check before you go on. Pre-call check.'),
+        h('ul', { class: 'checklist' }, sc.items.map((i) => h('li', {}, h('span', { class: 'mark ' + (i.ok ? 'ok' : i.optional ? 'opt' : 'bad'), 'aria-hidden': 'true' }, i.ok ? '✓' : i.optional ? '–' : '!'),
+          h('div', {}, h('strong', {}, i.label), i.optional ? h('span', { class: 'muted' }, ' (optional)') : null, h('div', { class: 'muted' }, i.detail))))),
+        h('h3', {}, 'Your checks'),
+        h('ul', { class: 'checklist' }, sc.manual.map((x) => h('li', {}, h('input', { type: 'checkbox', id: 'sc-' + x.id, checked: manual[x.id] ? true : null, onchange: (e) => { manual[x.id] = e.target.checked; renderWork(); } }),
+          h('label', { for: 'sc-' + x.id }, x.label)))),
+        h('p', { class: 'muted' }, 'Consent rules vary by place and company. Callback does not record anything.')),
+      h('div', { class: 'card ' + (ready ? 'ready' : '') }, h('div', { class: 'row' },
+        badge(ready ? 'Ready for showtime' : `${sc.blocking + manualLeft} item(s) still need you`, ready ? 'ok' : 'warn'),
+        h('button', { onclick: () => go(m.id, 'live') }, 'Go to Showtime'))));
+  }
+
+  /* ---------- Showtime: live call sheet, notes and capture. Nothing is recorded. ---------- */
+  let liveTimer = null;
+  const LIVE_KEY = 'callback.live.v1';
+  const CAP_LABEL = { learning: 'Learning', commitment: 'Commitment', concern: 'Concern', next_step: 'Next step' };
+  const mmss = (ms) => { const s = Math.max(0, Math.floor(ms / 1000)); return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0'); };
+  function liveOf(id) {
+    const lv = (state.live[id] = state.live[id] && typeof state.live[id] === 'object' ? state.live[id] : {});
+    lv.startedAt = typeof lv.startedAt === 'number' ? lv.startedAt : null;
+    lv.endedAt = typeof lv.endedAt === 'number' ? lv.endedAt : null;
+    lv.agendaDone = lv.agendaDone || {}; lv.asked = lv.asked || {};
+    lv.notes = typeof lv.notes === 'string' ? lv.notes : '';
+    lv.captures = Array.isArray(lv.captures) ? lv.captures : [];
+    return lv;
+  }
+  const elapsed = (lv) => (lv.startedAt ? (lv.endedAt || Date.now()) - lv.startedAt : null);
+  function persistLive() { try { localStorage.setItem(LIVE_KEY, JSON.stringify(state.live)); } catch (e) { /* storage unavailable: stays in memory */ } }
+  function capLine(c) {
+    const bits = [c.at == null ? 'timer off' : mmss(c.at)];
+    if (c.kind === 'commitment' || c.kind === 'next_step') { bits.push(c.owner ? `Owner: ${c.owner}` : 'Owner: not stated'); bits.push(c.due ? `Due: ${c.due}` : 'Due: not stated'); }
+    return bits.join(' · ');
+  }
+
+  function renderShowtime(m) {
+    const conf = state.conf[m.id], lv = liveOf(m.id);
+    if (state.agenda[m.id] == null) state.agenda[m.id] = L.buildPrepBrief(m, conf).agenda.join('\n');
+    const sum = (getBrief(m) || {}).summary || null;
+    const sheet = L.callSheet(m, conf, sum, state.agenda[m.id]);
+
+    const timerEl = h('span', { class: 'timer' }, lv.startedAt ? mmss(elapsed(lv)) : '00:00');
+    if (lv.startedAt && !lv.endedAt) liveTimer = setInterval(() => { timerEl.textContent = mmss(elapsed(lv)); }, 1000);
+    const status = !lv.startedAt
+      ? h('div', { class: 'row' }, h('span', { class: 'muted' }, 'Not started. This is only a timer; nothing is recorded.'), h('button', { onclick: () => { lv.startedAt = Date.now(); lv.endedAt = null; persistLive(); renderWork(); } }, 'Start call timer'))
+      : lv.endedAt
+        ? h('div', { class: 'row' }, h('strong', {}, 'Call ended'), timerEl, h('button', { onclick: () => go(m.id, 'coaching') }, 'Open Notes'), h('button', { class: 'secondary', onclick: () => { lv.startedAt = null; lv.endedAt = null; persistLive(); renderWork(); } }, 'Reset timer'))
+        : h('div', { class: 'row' }, h('span', { class: 'live-dot', 'aria-hidden': 'true' }), h('strong', {}, 'In call'), timerEl, h('button', { onclick: () => { lv.endedAt = Date.now(); persistLive(); renderWork(); } }, 'End call'));
+
+    const check = (store, i, text) => h('label', { class: 'cs-item' + (store[i] ? ' done' : '') },
+      h('input', { type: 'checkbox', checked: store[i] ? true : null, onchange: (e) => { store[i] = e.target.checked; e.target.parentNode.classList.toggle('done', e.target.checked); persistLive(); } }), h('span', {}, text));
+
+    const left = h('section', { class: 'pane' }, h('h3', {}, 'Call sheet'),
+      h('div', { class: 'cs-group' }, h('strong', {}, 'Agenda'), sheet.agenda.map((t, i) => check(lv.agendaDone, i, t))),
+      h('div', { class: 'cs-group' }, h('strong', {}, 'Discovery questions'), sheet.questions.map((q, i) => check(lv.asked, i, q))),
+      h('div', { class: 'cs-group' }, h('strong', {}, 'Cast'), h('ul', { class: 'plain' }, sheet.attendees.map((a) => h('li', {}, a.name, ' ', a.role ? h('span', { class: 'muted' }, a.role) : h('span', { class: 'muted' }, '(role unconfirmed)'))))),
+      h('div', { class: 'cs-group' }, h('strong', {}, 'Key facts'), sheet.hasBrief
+        ? [h('div', { class: 'muted' }, 'From your brief, unverified'), h('dl', { class: 'facts' }, sheet.facts.map(([k, v]) => [h('dt', {}, k), h('dd', {}, v)]))]
+        : h('p', { class: 'muted' }, 'No account brief loaded. Add one on Playbill.')));
+
+    const notes = h('textarea', { rows: 9, 'aria-label': 'Your notes', placeholder: 'Type your notes as the call goes…', oninput: (e) => { lv.notes = e.target.value; persistLive(); } }, lv.notes);
+    const capText = h('input', { type: 'text', 'aria-label': 'Line to capture', placeholder: 'Line to capture (or select text in your notes)' });
+    const capOwner = h('input', { type: 'text', 'aria-label': 'Owner', placeholder: 'Owner, only if stated' });
+    const capDue = h('input', { type: 'text', 'aria-label': 'Due', placeholder: 'Due, only if stated' });
+    const capMsg = h('div', { class: 'muted', role: 'status' });
+    const pickLine = () => {
+      const sel = notes.value.slice(notes.selectionStart, notes.selectionEnd).trim();
+      if (sel) return sel;
+      const lines = notes.value.split('\n').map((s) => s.trim()).filter(Boolean);
+      return lines[lines.length - 1] || '';
+    };
+    const capture = (kind) => {
+      const cap = L.makeCapture(kind, capText.value.trim() || pickLine(), { owner: capOwner.value, due: capDue.value, atMs: elapsed(lv) });
+      if (!cap) { capMsg.textContent = 'Type a line to capture, or write some notes first.'; return; }
+      lv.captures.push(cap); persistLive(); renderWork();
+    };
+    const center = h('section', { class: 'pane wide' }, h('h3', {}, 'Your notes'), h('div', { class: 'muted' }, 'Saved in this browser only.'), notes,
+      h('h3', {}, 'Capture a line'), capText, h('div', { class: 'row' }, capOwner, capDue),
+      h('div', { class: 'row' }, L.CAPTURE_KINDS.map((k) => h('button', { class: 'secondary', onclick: () => capture(k) }, CAP_LABEL[k]))), capMsg,
+      h('h3', {}, `Captured (${lv.captures.length})`),
+      lv.captures.length ? lv.captures.map((c, i) => h('div', { class: 'cap' }, h('span', { class: 'cap-kind' }, CAP_LABEL[c.kind]),
+        h('div', { style: 'flex:1;min-width:0' }, c.text, h('div', { class: 'muted' }, capLine(c))),
+        h('button', { class: 'secondary', 'aria-label': 'Remove capture', onclick: () => { lv.captures.splice(i, 1); persistLive(); renderWork(); } }, 'Remove'))) : h('p', { class: 'muted' }, 'Nothing captured yet.'));
+
+    const right = h('section', { class: 'pane' }, h('h3', {}, 'Transcript'),
+      h('div', { class: 'dashed' }, h('strong', {}, 'Transcription is not connected'), h('p', { class: 'muted' }, 'Nothing is being recorded. A transcript source would be added later, only after a real, authorized connection exists.')),
+      h('h3', {}, 'Notes agent'),
+      h('p', { class: 'muted' }, 'Would draft structured notes from your notes and a transcript, with you approving every line. It would not invent quotes, owners, dates or sentiment, and would flag unclear speakers.'),
+      h('button', { disabled: true, title: 'Needs a transcript source, which is not built' }, 'Draft notes (unavailable)'),
+      h('p', { class: 'muted' }, 'Get the customer\'s consent before recording or transcribing a call.'));
+
+    return h('div', { class: 'stack' }, h('div', { class: 'card' }, status), h('div', { class: 'card panes' }, left, center, right));
+  }
+
   /* ---------- init ---------- */
+  try { const saved = JSON.parse(localStorage.getItem(LIVE_KEY) || 'null'); if (saved && typeof saved === 'object' && !Array.isArray(saved)) state.live = saved; } catch (e) { /* ignore */ }
   buildShell();
   window.addEventListener('hashchange', renderWork);
   window.addEventListener('keydown', (e) => {
     const r = route(); const i = Number(e.key) - 1;
-    if (!r.id || e.metaKey || e.ctrlKey || e.altKey || !(i >= 0 && i < 5)) return;
+    if (!r.id || e.metaKey || e.ctrlKey || e.altKey || !(i >= 0 && i < TAB_KEYS.length)) return;
     if (/^(INPUT|TEXTAREA|SELECT)$/.test((document.activeElement || {}).tagName)) return;
     go(r.id, TAB_KEYS[i]);
   });
