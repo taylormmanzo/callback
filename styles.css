@@ -19,10 +19,10 @@
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 Inter, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
-.masthead { background: var(--yellow); color: #14100b; text-align: center; padding: 22px 24px 16px; border-bottom: 4px solid #14100b; }
-.wordmark { font-family: "Rozha One", "Abril Fatface", Georgia, serif; font-size: clamp(40px, 8vw, 68px); line-height: 1; letter-spacing: .02em; text-transform: uppercase; }
-.tagline { margin-top: 10px; font-size: 12px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; }
-.navbar { display: flex; gap: 24px; align-items: center; padding: 10px 24px; background: var(--panel); border-bottom: 1px solid var(--line); }
+.masthead { display: flex; flex-wrap: wrap; align-items: baseline; gap: 6px 18px; padding: 14px 24px; background: var(--panel); border-top: 8px solid var(--yellow); border-bottom: 1px solid var(--line); }
+.wordmark { font-family: "Rozha One", "Abril Fatface", Georgia, serif; font-size: 34px; line-height: 1; letter-spacing: .04em; text-transform: uppercase; color: var(--text); }
+.tagline { font-size: 11px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; color: var(--gold); }
+.masthead nav { margin-left: auto; }
 .navlink { color: var(--muted); text-decoration: none; padding: 5px 12px; border-radius: 8px; font-weight: 500; }
 .navlink.active { background: var(--accent-bg); color: var(--gold); font-weight: 600; }
 .banner { background: var(--warn-bg); color: var(--warn); padding: 7px 24px; font-size: 13px; border-bottom: 1px solid var(--line); }
