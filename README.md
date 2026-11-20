@@ -1,4 +1,6 @@
-# Customer Meeting Workspace (synthetic demo)
+# Callback (synthetic demo)
+
+Prep, Dress Rehearsal, Live, Notes, Callback: earn the callback. Live is not built yet.
 
 Static, dependency-free app. No build step, no network calls, no integrations.
 

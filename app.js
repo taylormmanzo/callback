@@ -87,7 +87,7 @@
     if (!m) { workPane.replaceChildren(h('div', { class: 'card empty' }, h('div', { class: 'big' }, '🗓️'), h('h2', {}, 'Pick a meeting to get started'), h('p', {}, 'Open any synthetic meeting on the left to prepare, rehearse, review and follow up.'))); return; }
     const sections = { prep: renderPrep, context: renderContext, rehearsal: renderRehearsal, coaching: renderCoaching, follow: renderFollow };
     const sec = sections[section] ? section : 'prep';
-    const tabs = h('div', { class: 'tabs', role: 'tablist' }, [['prep', 'Prep'], ['context', 'Customer Context'], ['rehearsal', 'Rehearsal'], ['coaching', 'Coaching'], ['follow', 'Follow-through']].map(([k, t]) =>
+    const tabs = h('div', { class: 'tabs', role: 'tablist' }, [['prep', 'Prep'], ['context', 'Customer Context'], ['rehearsal', 'Dress Rehearsal'], ['coaching', 'Notes'], ['follow', 'Callback']].map(([k, t]) =>
       h('button', { class: 'tab', role: 'tab', 'aria-selected': k === sec ? 'true' : 'false', onclick: () => go(m.id, k) }, t, h('kbd', {}, TAB_KEYS.indexOf(k) + 1))));
     workPane.replaceChildren(renderHeader(m), tabs, sections[sec](m));
   }
@@ -280,7 +280,7 @@
     const sum = (getBrief(m) || {}).summary || null;
     const likely = sum ? sum.sentiment : { mood: 'skeptical', reasons: ['No account brief uploaded, so this defaults to skeptical.'] };
     const externals = m.participants.filter((p) => !p.internal);
-    const wrap = h('div', { class: 'card stack' }, h('h2', {}, 'Rehearsal'),
+    const wrap = h('div', { class: 'card stack' }, h('h2', {}, 'Dress Rehearsal'),
       h('div', { class: 'sim-banner' }, 'SIMULATION. Replies are scripted from the meeting and your brief, not the real person. Nothing here is saved as a customer fact.'),
       h('p', { class: 'muted' }, 'Text only. Voice interaction is not available in this demo.'));
     if (!r.active) {
@@ -371,7 +371,7 @@
     const d = getDraft(m), lim = L.LIMITS, locked = d.status !== 'draft';
     const field = (obj, key, label, tag) => h(tag || 'input', { 'aria-label': label, value: obj[key], disabled: locked, oninput: (e) => { obj[key] = e.target.value; } });
     const rm = (arr, i) => h('button', { class: 'secondary', disabled: locked, onclick: () => { arr.splice(i, 1); renderWork(); } }, 'Remove');
-    const card = h('div', { class: 'card stack' }, h('h2', {}, 'Follow-through draft'),
+    const card = h('div', { class: 'card stack' }, h('h2', {}, 'Callback: follow-through draft'),
       h('div', { class: 'row' }, badge(d.status === 'draft' ? 'Draft: not approved' : d.status === 'confirming' ? 'Awaiting your approval' : 'Approved: local preview only', d.status === 'approved' ? 'ok' : 'warn'), badge('Destination: local preview (nothing is sent)', 'plain')),
       d.gen.notes.map((n) => h('p', { class: 'muted' }, n)));
 
