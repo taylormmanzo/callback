@@ -1,30 +1,30 @@
 /* Callback: stage-door theme. Dark house with gold marquee by default; cream playbill in light mode. */
 :root {
-  --bg: #0f0a10; --panel: #1b121c; --panel-2: #231724; --text: #f5ebdd; --muted: #b9a99c; --line: #3a2736;
-  --gold: #e7b64a; --accent: #e7b64a; --accent-ink: #1a1000; --accent-bg: #33270f; --velvet: #a3203f;
-  --ok: #82d8a6; --ok-bg: #15301f; --warn: #f2c56a; --warn-bg: #3a2c0e;
-  --bad: #ff9ca3; --bad-bg: #41191f; --sim: #f0a9c4; --sim-bg: #3a1727;
+  --bg: #14100b; --panel: #1f1811; --panel-2: #2a2117; --text: #f3e9d6; --muted: #bdae98; --line: #44362a;
+  --gold: #e7b64a; --accent: #e7b64a; --accent-ink: #1a1000; --accent-bg: #3a2c12; --velvet: #7a5528; --yellow: #f7d417;
+  --ok: #a7d3a0; --ok-bg: #1e2e1f; --warn: #f2c56a; --warn-bg: #3f3010;
+  --bad: #f0a38a; --bad-bg: #3e2118; --sim: #d9b88a; --sim-bg: #35281b;
   --shadow: 0 1px 2px rgba(0,0,0,.5), 0 10px 28px rgba(0,0,0,.35);
   --radius: 12px;
   --serif: "Playfair Display", Georgia, "Times New Roman", serif;
 }
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #f6eedf; --panel: #fffbf3; --panel-2: #f3e9d6; --text: #2b1620; --muted: #6e5a55; --line: #e2d4bc;
-    --gold: #b8841a; --accent: #8e1b36; --accent-ink: #fff6e5; --accent-bg: #f3e1da; --velvet: #8e1b36;
-    --ok: #14683e; --ok-bg: #e0f2e6; --warn: #7a4d00; --warn-bg: #fff0cf;
-    --bad: #a12e22; --bad-bg: #fde5e2; --sim: #7b2a62; --sim-bg: #f6e3ee;
-    --shadow: 0 1px 2px rgba(43,22,32,.06), 0 8px 22px rgba(43,22,32,.08);
+    --bg: #f3ead6; --panel: #fffaf0; --panel-2: #f1e5cc; --text: #2a1d12; --muted: #6b5a47; --line: #dccdb0;
+    --gold: #9a6b0f; --accent: #7a4a0e; --accent-ink: #fff4dd; --accent-bg: #f1e0b8; --velvet: #7a5528; --yellow: #f7d417;
+    --ok: #2d6a2f; --ok-bg: #e3efd9; --warn: #7a4d00; --warn-bg: #fbe9b8;
+    --bad: #a13b22; --bad-bg: #f8dfd2; --sim: #6e4f22; --sim-bg: #eddcb9;
+    --shadow: 0 1px 2px rgba(42,29,18,.06), 0 8px 22px rgba(42,29,18,.10);
   }
 }
 * { box-sizing: border-box; }
 body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.55 Inter, system-ui, -apple-system, "Segoe UI", sans-serif; -webkit-font-smoothing: antialiased; }
-.topbar { display: flex; gap: 24px; align-items: center; padding: 12px 24px; background: var(--panel); border-bottom: 1px solid var(--line); }
-.brand { font-family: var(--serif); font-size: 20px; letter-spacing: .01em; }
-.brand::before { content: "\2605"; color: var(--gold); margin-right: 8px; font-size: 16px; }
+.masthead { background: var(--yellow); color: #14100b; text-align: center; padding: 22px 24px 16px; border-bottom: 4px solid #14100b; }
+.wordmark { font-family: "Rozha One", "Abril Fatface", Georgia, serif; font-size: clamp(40px, 8vw, 68px); line-height: 1; letter-spacing: .02em; text-transform: uppercase; }
+.tagline { margin-top: 10px; font-size: 12px; font-weight: 600; letter-spacing: .22em; text-transform: uppercase; }
+.navbar { display: flex; gap: 24px; align-items: center; padding: 10px 24px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .navlink { color: var(--muted); text-decoration: none; padding: 5px 12px; border-radius: 8px; font-weight: 500; }
 .navlink.active { background: var(--accent-bg); color: var(--gold); font-weight: 600; }
-.marquee { height: 12px; background: radial-gradient(circle at 11px 6px, var(--gold) 2.6px, transparent 3.2px) 0 0 / 22px 12px repeat-x; border-bottom: 1px solid var(--line); background-color: var(--panel); }
 .banner { background: var(--warn-bg); color: var(--warn); padding: 7px 24px; font-size: 13px; border-bottom: 1px solid var(--line); }
 #app { display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 24px; padding: 24px; max-width: 1400px; margin: 0 auto; align-items: start; }
 @media (max-width: 900px) { #app { grid-template-columns: 1fr; padding: 16px; } }
